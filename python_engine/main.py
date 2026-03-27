@@ -1,7 +1,8 @@
 import os
 os.environ["OPENAI_API_KEY"] = "your_key_here"
 
-
+from automation import run_automation
+import threading
 
 from fastapi import FastAPI, UploadFile, File
 import pandas as pd
@@ -76,3 +77,17 @@ def report():
 @app.get("/process")
 def process(prompt: str):
     return {"result": process_prompt(prompt, FILE_PATH)}
+
+#-------- Automation --------
+@app.on_event("startup")
+def start_automation():
+    thread = threading.Thread(target=run_automation)
+    thread.daemon = True
+    thread.start()
+
+@app.get("/run-automation")
+def trigger_automation():
+    run_automation()
+    return {"message": "Automation started"}
+
+
