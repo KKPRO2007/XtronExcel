@@ -2,6 +2,7 @@ from charts import create_chart
 from analysis import analyze_data
 from report_generator import generate_report
 from data_cleaning import clean_data
+from excel_generator import generate_advanced_excel
 
 def process_prompt(prompt, file_path):
 
@@ -24,6 +25,9 @@ def process_prompt(prompt, file_path):
     
     elif "line" in prompt:
         return create_chart(file_path, "line")
+    
+    elif "excel" in prompt or "report" in prompt:
+        return generate_advanced_excel(file_path)
 
     else:
         return "Sorry, I could not understand the task"
