@@ -1,32 +1,22 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-const phases = [
-  'Initializing AI modules...',
-  'Loading neural networks...',
-  'Connecting Excel engine...',
-  'Preparing workspace...',
-  'Almost ready...',
-]
-
-const checks = [
-  'AI Engine', 'Excel Parser', 'Neural Net',
-  'File System', 'Voice Module', 'Workspace',
-]
+const PHASES = ['Initializing AI modules...', 'Loading neural networks...', 'Connecting Excel engine...', 'Preparing workspace...', 'Almost ready...']
+const CHECKS = ['AI Engine', 'Excel Parser', 'Neural Net', 'File System', 'Voice Module', 'Workspace']
 
 export default function Loading() {
-  const navigate = useNavigate()
+  const nav = useNavigate()
   const [progress, setProgress] = useState(0)
   const [phase, setPhase] = useState(0)
-  const [ready, setReady] = useState<boolean[]>(Array(checks.length).fill(false))
+  const [ready, setReady] = useState<boolean[]>(Array(CHECKS.length).fill(false))
   const [done, setDone] = useState(false)
   const [cells, setCells] = useState<number[]>(Array(120).fill(0))
 
   useEffect(() => {
-    const cellInterval = setInterval(() => {
+    const ci = setInterval(() => {
       setCells(prev => {
         const next = [...prev]
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 4; i++) {
           const idx = Math.floor(Math.random() * 120)
           next[idx] = Math.random() > 0.5 ? 1 : 0
         }
@@ -35,210 +25,90 @@ export default function Loading() {
     }, 80)
 
     let p = 0
-    const progInterval = setInterval(() => {
-      p += Math.random() * 2.8 + 0.4
+    const pi = setInterval(() => {
+      p += Math.random() * 2.8 + 0.5
       if (p >= 100) {
-        p = 100
-        clearInterval(progInterval)
+        p = 100; clearInterval(pi)
         setTimeout(() => setDone(true), 300)
-        setTimeout(() => navigate('/get-started'), 700)
+        setTimeout(() => nav('/get-started'), 750)
       }
       setProgress(Math.min(p, 100))
-      setPhase(Math.min(Math.floor((p / 100) * phases.length), phases.length - 1))
+      setPhase(Math.min(Math.floor((p / 100) * PHASES.length), PHASES.length - 1))
       setReady(prev => {
         const next = [...prev]
-        const threshold = (100 / checks.length)
-        for (let i = 0; i < checks.length; i++) {
-          if (p > threshold * (i + 1)) next[i] = true
-        }
+        const thr = 100 / CHECKS.length
+        for (let i = 0; i < CHECKS.length; i++) { if (p > thr * (i + 1)) next[i] = true }
         return next
       })
     }, 55)
-
-    return () => { clearInterval(cellInterval); clearInterval(progInterval) }
+    return () => { clearInterval(ci); clearInterval(pi) }
   }, [])
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0,
-      background: 'var(--bg)',
-      display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      overflow: 'hidden',
-      transition: done ? 'opacity 0.4s ease, transform 0.4s ease' : undefined,
-      opacity: done ? 0 : 1,
-      transform: done ? 'scale(1.02)' : 'scale(1)',
-    }}>
+    <div style={{ position: 'fixed', inset: 0, background: '#000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', transition: done ? 'opacity 0.4s ease' : undefined, opacity: done ? 0 : 1 }}>
       <style>{`
-        @keyframes scan {
-          0% { transform: translateY(-100%); }
-          100% { transform: translateY(100vh); }
-        }
-        @keyframes glitch-1 {
-          0%, 85%, 100% { clip-path: none; transform: none; }
-          87% { clip-path: polygon(0 20%, 100% 20%, 100% 40%, 0 40%); transform: translate(-3px, 0); }
-          89% { clip-path: polygon(0 60%, 100% 60%, 100% 80%, 0 80%); transform: translate(3px, 0); }
-          91% { clip-path: none; transform: none; }
-        }
-        @keyframes num-flip {
-          from { opacity: 0; transform: translateY(3px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes check-in {
-          from { opacity: 0; transform: translateX(-8px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-        .loading-glitch { animation: glitch-1 6s infinite; }
-        .num-animate { animation: num-flip 0.06s ease; }
+        @keyframes scan { 0%{transform:translateY(-100%)} 100%{transform:translateY(100vh)} }
+        @keyframes glitch { 0%,85%,100%{clip-path:none;transform:none} 87%{clip-path:polygon(0 20%,100% 20%,100% 40%,0 40%);transform:translate(-3px,0)} 89%{clip-path:polygon(0 60%,100% 60%,100% 80%,0 80%);transform:translate(3px,0)} 91%{clip-path:none;transform:none} }
+        @keyframes check-in { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
+        .loading-glitch { animation: glitch 6s infinite; }
       `}</style>
 
-      <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none',
-        display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gridTemplateRows: 'repeat(10, 1fr)',
-      }}>
+      {/* BG grid */}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gridTemplateRows: 'repeat(10, 1fr)' }}>
         {cells.map((v, i) => (
-          <div key={i} style={{
-            border: '1px solid',
-            borderColor: v ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.02)',
-            background: v ? 'rgba(255,255,255,0.025)' : 'transparent',
-            transition: 'all 0.4s ease',
-          }} />
+          <div key={i} style={{ border: '1px solid', borderColor: v ? 'rgba(59,130,246,0.12)' : 'rgba(255,255,255,0.025)', background: v ? 'rgba(59,130,246,0.04)' : 'transparent', transition: 'all 0.4s ease' }}/>
         ))}
       </div>
 
-      <div style={{
-        position: 'absolute', left: 0, right: 0, height: 3, pointerEvents: 'none', zIndex: 50,
-        background: 'linear-gradient(180deg, transparent, rgba(255,255,255,0.025), transparent)',
-        animation: 'scan 3.5s linear infinite',
-      }} />
+      {/* Scanline */}
+      <div style={{ position: 'absolute', left: 0, right: 0, height: 2, pointerEvents: 'none', zIndex: 50, background: 'linear-gradient(180deg,transparent,rgba(59,130,246,0.15),transparent)', animation: 'scan 3.5s linear infinite' }}/>
 
-      {[
-        { top: 20, left: 20 },
-        { top: 20, right: 20 },
-        { bottom: 20, left: 20 },
-        { bottom: 20, right: 20 },
-      ].map((pos, i) => {
-        const isRight = 'right' in pos
-        const isBottom = 'bottom' in pos
-        return (
-          <div key={i} style={{
-            position: 'absolute', width: 20, height: 20,
-            borderTop: isBottom ? 'none' : '1px solid rgba(255,255,255,0.15)',
-            borderBottom: isBottom ? '1px solid rgba(255,255,255,0.15)' : 'none',
-            borderLeft: isRight ? 'none' : '1px solid rgba(255,255,255,0.15)',
-            borderRight: isRight ? '1px solid rgba(255,255,255,0.15)' : 'none',
-            ...pos,
-          }} />
-        )
+      {/* Corner brackets */}
+      {[{top:20,left:20},{top:20,right:20},{bottom:20,left:20},{bottom:20,right:20}].map((pos, i) => {
+        const isR = 'right' in pos, isB = 'bottom' in pos
+        return <div key={i} style={{ position:'absolute', width:20, height:20, borderTop:isB?'none':'1px solid rgba(59,130,246,0.35)', borderBottom:isB?'1px solid rgba(59,130,246,0.35)':'none', borderLeft:isR?'none':'1px solid rgba(59,130,246,0.35)', borderRight:isR?'1px solid rgba(59,130,246,0.35)':'none', ...pos as any }}/>
       })}
 
+      {/* Content */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 36, zIndex: 10 }}>
         <div style={{ textAlign: 'center' }}>
           <div className="loading-glitch" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <span style={{
-              fontFamily: "'Syne', sans-serif",
-              fontSize: 48, fontWeight: 800, letterSpacing: -2,
-              color: 'var(--text)',
-            }}>GPT</span>
-            <span style={{
-              fontFamily: "'Syne', sans-serif",
-              fontSize: 48, fontWeight: 800, letterSpacing: -2,
-              color: 'var(--bg)',
-              background: 'var(--text)', padding: '2px 12px',
-            }}>EXCEL</span>
+            <span style={{ fontFamily: "'Syne',sans-serif", fontSize: 52, fontWeight: 800, letterSpacing: -2, color: '#f5f5f5' }}>GPT</span>
+            <span style={{ fontFamily: "'Syne',sans-serif", fontSize: 52, fontWeight: 800, letterSpacing: -2, background: '#3b82f6', color: '#fff', padding: '2px 14px' }}>EXCEL</span>
           </div>
-          <div style={{
-            marginTop: 6, fontSize: 10,
-            fontFamily: "'JetBrains Mono', monospace",
-            letterSpacing: 6, color: 'rgba(255,255,255,0.25)',
-            textTransform: 'uppercase',
-          }}>
-            AI Spreadsheet Intelligence
+          <div style={{ marginTop: 8, fontSize: 10, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 6, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase' }}>
+            AI Spreadsheet Intelligence · Datum_GLAU
           </div>
         </div>
 
         <div style={{ width: 320 }}>
-          <div style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            marginBottom: 8,
-          }}>
-            <span style={{
-              fontSize: 10, fontFamily: "'JetBrains Mono', monospace",
-              letterSpacing: 1, color: 'rgba(255,255,255,0.3)',
-            }}>
-              {phases[phase]}
-            </span>
-            <span style={{
-              fontSize: 13, fontFamily: "'JetBrains Mono', monospace",
-              fontWeight: 700, color: 'var(--text)', letterSpacing: 1,
-            }}>
-              {String(Math.floor(progress)).padStart(3, '0')}%
-            </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ fontSize: 10, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, color: 'rgba(255,255,255,0.3)' }}>{PHASES[phase]}</span>
+            <span style={{ fontSize: 13, fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, color: '#3b82f6', letterSpacing: 1 }}>{String(Math.floor(progress)).padStart(3, '0')}%</span>
           </div>
-          <div style={{
-            height: 1, background: 'rgba(255,255,255,0.08)',
-            position: 'relative', overflow: 'hidden',
-          }}>
-            <div style={{
-              position: 'absolute', top: 0, left: 0,
-              height: '100%', width: `${progress}%`,
-              background: 'var(--text)',
-              transition: 'width 0.05s linear',
-              boxShadow: '0 0 10px rgba(255,255,255,0.5)',
-            }} />
+          <div style={{ height: 2, background: 'rgba(255,255,255,0.06)', position: 'relative', overflow: 'hidden', borderRadius: 1 }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${progress}%`, background: 'linear-gradient(90deg, #3b82f6, #60a5fa)', transition: 'width 0.05s linear', boxShadow: '0 0 12px rgba(59,130,246,0.7)' }}/>
           </div>
-          <div style={{ display: 'flex', gap: 4, marginTop: 10, justifyContent: 'center' }}>
-            {Array(20).fill(0).map((_, i) => (
-              <div key={i} style={{
-                flex: 1, height: 2,
-                background: (i / 20) * 100 <= progress ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.1)',
-                transition: 'background 0.15s ease',
-                transitionDelay: `${i * 0.02}s`,
-              }} />
+          <div style={{ display: 'flex', gap: 3, marginTop: 10 }}>
+            {Array(24).fill(0).map((_, i) => (
+              <div key={i} style={{ flex: 1, height: 2, background: (i / 24) * 100 <= progress ? 'rgba(59,130,246,0.8)' : 'rgba(255,255,255,0.08)', transition: 'background 0.15s ease', transitionDelay: `${i * 0.015}s`, borderRadius: 1 }}/>
             ))}
           </div>
         </div>
 
-        <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr',
-          gap: '6px 40px',
-        }}>
-          {checks.map((label, i) => (
-            <div key={i} style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              fontSize: 10,
-              fontFamily: "'JetBrains Mono', monospace",
-              letterSpacing: 1.5, textTransform: 'uppercase',
-              color: ready[i] ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)',
-              transition: 'color 0.4s ease',
-              animation: ready[i] ? 'check-in 0.3s ease' : undefined,
-            }}>
-              <div style={{
-                width: 5, height: 5, flexShrink: 0,
-                background: ready[i] ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.1)',
-                boxShadow: ready[i] ? '0 0 6px rgba(255,255,255,0.6)' : 'none',
-                transition: 'all 0.4s ease',
-              }} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 48px' }}>
+          {CHECKS.map((label, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: 'uppercase', color: ready[i] ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.15)', transition: 'color 0.4s ease', animation: ready[i] ? 'check-in 0.3s ease' : undefined }}>
+              <div style={{ width: 5, height: 5, flexShrink: 0, background: ready[i] ? '#3b82f6' : 'rgba(255,255,255,0.1)', boxShadow: ready[i] ? '0 0 8px rgba(59,130,246,0.8)' : 'none', transition: 'all 0.4s ease' }}/>
               {label}
-              {ready[i] && (
-                <span style={{ marginLeft: 'auto', opacity: 0.35, fontSize: 8 }}>✓</span>
-              )}
+              {ready[i] && <span style={{ marginLeft: 'auto', opacity: 0.4, fontSize: 8, color: '#3b82f6' }}>✓</span>}
             </div>
           ))}
         </div>
       </div>
 
-      <div style={{
-        position: 'absolute', bottom: 22, left: 0, right: 0,
-        display: 'flex', justifyContent: 'space-between',
-        padding: '0 28px',
-        fontSize: 9,
-        fontFamily: "'JetBrains Mono', monospace",
-        letterSpacing: 2, color: 'rgba(255,255,255,0.15)',
-      }}>
-        <span>v2.0.0</span>
-        <span>ELECTRON · REACT · TS</span>
-        <span>© 2025</span>
+      <div style={{ position: 'absolute', bottom: 22, left: 0, right: 0, display: 'flex', justifyContent: 'space-between', padding: '0 28px', fontSize: 9, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, color: 'rgba(255,255,255,0.15)' }}>
+        <span>v2.0.0</span><span>ELECTRON · REACT · TYPESCRIPT · PYTHON</span><span>© 2026 GPT-EXCEL</span>
       </div>
     </div>
   )
