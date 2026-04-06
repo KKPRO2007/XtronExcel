@@ -89,6 +89,18 @@ async def process_with_prompt(file: UploadFile = File(...), prompt: str = ""):
 
 @app.post("/ppt")
 async def create_ppt(file: UploadFile = File(...)):
-    file_path = save_upload(file)
-    result = generate_ppt(file_path, output_path="output_report.pptx")
-    return {"message": result, "ppt_path": "output_report.pptx"}
+    try:
+        file_path = f"uploaded_{file.filename}"
+
+        with open(file_path, "wb") as f:
+            f.write(await file.read())
+
+        result = generate_ppt(file_path, "output_report.pptx")
+
+        return {
+            "message": result,
+            "ppt_path": "output_report.pptx"
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
