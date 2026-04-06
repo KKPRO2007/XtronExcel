@@ -9,6 +9,7 @@ from charts import create_chart
 from data_cleaning import clean_data
 from report_generator import generate_report
 from prompt_engine import process_prompt
+from ppt_generator import generate_ppt
  
 app = FastAPI(title="GPT Excel - Python Engine", version="1.0.0")
  
@@ -85,3 +86,9 @@ async def process_with_prompt(file: UploadFile = File(...), prompt: str = ""):
     file_path = save_upload(file)
     result = process_prompt(file_path, prompt)
     return {"result": result}
+
+@app.post("/ppt")
+async def create_ppt(file: UploadFile = File(...)):
+    file_path = save_upload(file)
+    result = generate_ppt(file_path, output_path="output_report.pptx")
+    return {"message": result, "ppt_path": "output_report.pptx"}
