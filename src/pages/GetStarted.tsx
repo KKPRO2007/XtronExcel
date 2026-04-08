@@ -6,24 +6,20 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 
 const FEATURES = [
-  { icon: '⊞', title: 'Excel AI Engine', desc: 'Natural language → production-ready Excel files with formulas, pivot tables, charts, and complete financial models from a single prompt.', tags: ['VLOOKUP', 'Pivot', 'Charts', 'Macros'], stat: '200+ formula types', color: 'var(--text)' },
-  { icon: '◱', title: 'Document Intelligence', desc: 'Generate reports, proposals, contracts, and CVs. Multi-doc comparison, summarization, grammar correction, and instant PDF export.', tags: ['Reports', 'Contracts', 'Research', 'CVs'], stat: '50+ templates', color: 'var(--text)' },
-  { icon: '◈', title: 'Smart File Manager', desc: 'AI-powered file categorization using semantic embeddings. Auto-tag, cluster, deduplicate, and intelligently search your entire workspace.', tags: ['Auto-Tag', 'Search', 'Dedup', 'Cluster'], stat: 'Embedding-based', color: 'var(--text)' },
-  { icon: '⌘', title: 'Workflow Automation', desc: 'Build drag-and-drop automation workflows. Schedule recurring reports, automate email drafts, and create powerful AI-driven task pipelines.', tags: ['Schedule', 'Automate', 'Tasks', 'Pipelines'], stat: 'Drag & drop builder', color: 'var(--text)' },
-  { icon: '◎', title: 'Voice Commands', desc: 'Hands-free via Web Speech API + Whisper. Voice-to-Excel, voice document creation, and real-time text-to-speech responses.', tags: ['Whisper', 'TTS', 'Offline', 'Live'], stat: 'Real-time transcription', color: 'var(--text)' },
-  { icon: '◬', title: 'Data Visualization', desc: 'Interactive charts, financial dashboards, KPI monitors, and predictive forecasting graphs. 20+ chart types with full customization.', tags: ['Charts', 'KPI', 'Forecast', 'Dashboard'], stat: '20+ chart types', color: 'var(--text)' },
-  { icon: '◻', title: 'PowerPoint Generator', desc: 'Auto-generate pitch decks with embedded charts and speaker notes. Custom themes, AI-written slide content.', tags: ['Slides', 'Charts', 'Notes', 'Themes'], stat: 'AI-powered decks', color: 'var(--text)' },
-  { icon: '🔌', title: 'Plugin Marketplace', desc: 'Extend with 40+ industry-specific plugins. Automation packs, custom integrations, full developer SDK.', tags: ['Plugins', 'Extensions', 'SDK', 'Integrations'], stat: '40+ plugins', color: 'var(--text)' },
-  { icon: '☁', title: 'Hybrid Cloud', desc: 'Firebase auth with cloud sync and local Python processing. Works offline for core features. Zero data lock-in.', tags: ['Firebase', 'Offline', 'Sync', 'Python'], stat: 'Hybrid architecture', color: 'var(--text)' },
+  { icon: 'XL', title: 'Excel AI Engine', desc: 'Natural language to production-ready Excel files with formulas, pivot tables, charts, and complete financial models from a single prompt.', tags: ['VLOOKUP', 'Pivot', 'Charts', 'Macros'], stat: '200+ formula types', color: 'var(--text)' },
+  { icon: 'DOC', title: 'Document Intelligence', desc: 'Generate reports, proposals, contracts, and CVs. Multi-doc comparison, summarization, grammar correction, and instant PDF export.', tags: ['Reports', 'Contracts', 'Research', 'CVs'], stat: '50+ templates', color: 'var(--text)' },
+  { icon: 'FM', title: 'Smart File Manager', desc: 'AI-powered file categorization using semantic embeddings. Auto-tag, cluster, deduplicate, and intelligently search your entire workspace.', tags: ['Auto-Tag', 'Search', 'Dedup', 'Cluster'], stat: 'Embedding-based', color: 'var(--text)' },
+  { icon: 'CH', title: 'Data Visualization', desc: 'Interactive charts, financial dashboards, KPI monitors, and predictive forecasting graphs. 20+ chart types with full customization.', tags: ['Charts', 'KPI', 'Forecast', 'Dashboard'], stat: '20+ chart types', color: 'var(--text)' },
+  { icon: 'CL', title: 'Cloud Workspace', desc: 'Firebase auth with synced AI sessions, workbook context, and secure generation services built for always-online collaboration.', tags: ['Firebase', 'Cloud', 'Sync', 'Python'], stat: 'Connected architecture', color: 'var(--text)' },
 ];
 
 const FAQS = [
-  { q: 'Does it work offline?', a: 'Yes. XtronExcel uses a hybrid architecture. Core Excel generation, file management, and basic voice commands work fully offline using local Python. AI features require internet for LLM calls.' },
-  { q: 'What AI models does it use?', a: 'Primary: OpenAI GPT-4o for generation. Azure OpenAI for enterprise. Whisper for voice transcription. Configure your own API keys in Settings for full model control.' },
-  { q: 'What file formats are supported?', a: 'Excel (.xlsx, .xls, .xlsm), CSV, PDF, Word (.docx), PowerPoint (.pptx), JSON, and plain text. Export to any format from generated content in one click.' },
-  { q: 'Is there a free tier?', a: '50 AI generations/month, basic Excel features, and file manager. Pro ($12/mo) unlocks unlimited generations, all voice features, advanced automation, and priority support.' },
-  { q: 'How is my data protected?', a: 'Files are processed locally using Python. Only prompts are sent to AI APIs — never raw file contents. Firebase handles auth securely. No vendor lock-in.' },
-  { q: 'Can I use my own API key?', a: 'Yes. Settings → API Keys. Paste your OpenAI, Azure, or Anthropic key for direct billing control and access to latest models.' },
+  { q: 'Does it need internet?', a: 'Yes. XtronExcel now runs as an online-first workspace so AI chat, document generation, and spreadsheet workflows stay connected to the backend.' },
+  { q: 'What AI models does it use?', a: 'Primary: OpenAI GPT-4o for generation. Configure your own API keys in Settings for direct billing control and model flexibility.' },
+  { q: 'What file formats are supported?', a: 'Excel (.xlsx, .xls, .xlsm), CSV, PDF, Word (.docx), JSON, and plain text. Export generated content in one click.' },
+  { q: 'Is there a free tier?', a: '50 AI generations/month, basic Excel features, and file manager. Pro ($12/mo) unlocks unlimited generations, advanced creation, and priority support.' },
+  { q: 'How is my data protected?', a: 'Files are processed locally using Python. Only prompts are sent to AI APIs, never raw file contents. Firebase handles auth securely. No vendor lock-in.' },
+  { q: 'Can I use my own API key?', a: 'Yes. Settings > API Keys. Paste your OpenAI, Azure, or Anthropic key for direct billing control and access to latest models.' },
 ];
 
 const TECH = ['Electron.js','React 18','TypeScript','Python 3.11','FastAPI','OpenAI GPT-4o','Whisper API','OpenPyXL','Pandas','Firebase','Redux Toolkit','Monaco Editor','Recharts','Socket.io','SQLite','Stripe','Vite','Electron Builder'];
@@ -341,7 +337,7 @@ export default function GetStarted() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 22, fontSize: '0.75rem', color: 'var(--text-muted)', animation: 'popIn 0.5s ease 0.8s both', opacity: 0 }}>
-            {['No credit card', '50 free generations/mo', 'Offline capable', 'Open source'].map(t => (
+            {['No credit card', '50 free generations/mo', 'Online AI workspace', 'Open source'].map(t => (
               <span key={t} style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: 'var(--text)' }}>✓</span>{t}</span>
             ))}
           </div>
@@ -435,8 +431,8 @@ export default function GetStarted() {
           <p style={{ marginBottom: 44 }}>Start free. Upgrade when you need more power.</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             {[
-              { name: 'Free', price: '$0', desc: 'Perfect for individuals getting started', color: 'var(--text)', features: ['50 AI generations/month', 'Basic Excel generation', '1 GB file storage', '3 workflow automations', 'Community support', 'Core voice commands'], btn: 'Get started free', cls: 'btn-outline' },
-              { name: 'Pro', price: '$12', desc: 'Everything for power users & teams', color: 'var(--text)', features: ['Unlimited AI generations', 'All Excel + Document features', '50 GB file storage', 'Unlimited workflows', 'Whisper voice commands', 'Priority support (24h)', 'Plugin marketplace', 'Custom AI model selection', 'Team collaboration'], btn: 'Start Pro trial', cls: 'btn-primary', popular: true },
+              { name: 'Free', price: '$0', desc: 'Perfect for individuals getting started', color: 'var(--text)', features: ['50 AI generations/month', 'Basic Excel generation', '1 GB file storage', 'Document workspace', 'Community support', 'AI chat assistant'], btn: 'Get started free', cls: 'btn-outline' },
+              { name: 'Pro', price: '$12', desc: 'Everything for power users & teams', color: 'var(--text)', features: ['Unlimited AI generations', 'All Excel + Document features', '50 GB file storage', 'Advanced charting', 'Priority support (24h)', 'Custom AI model selection', 'Team collaboration'], btn: 'Start Pro trial', cls: 'btn-primary', popular: true },
             ].map((p, i) => {
               const r = useRef<HTMLDivElement>(null);
               const iv = useInView(r as any, 0.2);
@@ -558,3 +554,4 @@ export default function GetStarted() {
     </div>
   );
 }
+

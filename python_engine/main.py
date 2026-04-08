@@ -13,7 +13,6 @@ from charts import create_chart
 from data_cleaning import clean_data
 from report_generator import generate_report
 from word_generator import generate_word_report
-from ppt_generator import generate_ppt
 from prompt_engine import process_prompt
 from file_segmentation import (
     segment_by_column, segment_by_row_count,
@@ -113,7 +112,9 @@ async def upload_file(file: UploadFile = File(...)):
 async def read_file(file: UploadFile = File(...), limit: int = Query(25, ge=1, le=500)):
     _validate_excel_filename(file.filename)
     file_path = save_upload(file)
+    file_id = _record_file(file_path)
     data = read_excel(file_path, limit=limit)
+    save_analysis(file_id, "read", {"limit": limit, "preview": data})
     return {"data": data}
 
 
@@ -176,17 +177,6 @@ async def create_word(file: UploadFile = File(...)):
     return {"message": result, "output_path": output_path}
 
 
-@app.post("/ppt")
-async def create_ppt(file: UploadFile = File(...)):
-    _validate_excel_filename(file.filename)
-    file_path = save_upload(file)
-    output_path = out("output_report.pptx")
-    result = generate_ppt(file_path, output_path=output_path)
-    file_id = _record_file(file_path)
-    save_generated_file(file_id, "pptx", output_path)
-    return {"message": result, "output_path": output_path}
-
-
 @app.post("/excel-advanced")
 async def create_advanced_excel(file: UploadFile = File(...)):
     _validate_excel_filename(file.filename)
@@ -217,6 +207,10 @@ async def segment_column(
     _validate_excel_filename(file.filename)
     file_path = save_upload(file)
     result = segment_by_column(file_path, column, output_dir=str(SEGMENT_DIR))
+    file_id = _record_file(file_path)
+    for path in result.get("output_files", []):
+        save_generated_file(file_id, "segment_column", path)
+    save_analysis(file_id, "segment_column", {"column": column, "result": result})
     return result
 
 
@@ -228,6 +222,10 @@ async def segment_rows(
     _validate_excel_filename(file.filename)
     file_path = save_upload(file)
     result = segment_by_row_count(file_path, chunk_size, output_dir=str(SEGMENT_DIR))
+    file_id = _record_file(file_path)
+    for path in result.get("output_files", []):
+        save_generated_file(file_id, "segment_rows", path)
+    save_analysis(file_id, "segment_rows", {"chunk_size": chunk_size, "result": result})
     return result
 
 
@@ -240,6 +238,10 @@ async def segment_date(
     _validate_excel_filename(file.filename)
     file_path = save_upload(file)
     result = segment_by_date_column(file_path, date_column, freq, output_dir=str(SEGMENT_DIR))
+    file_id = _record_file(file_path)
+    for path in result.get("output_files", []):
+        save_generated_file(file_id, "segment_date", path)
+    save_analysis(file_id, "segment_date", {"date_column": date_column, "freq": freq, "result": result})
     return result
 
 
@@ -247,7 +249,10 @@ async def segment_date(
 async def file_info(file: UploadFile = File(...)):
     _validate_excel_filename(file.filename)
     file_path = save_upload(file)
-    return get_file_info(file_path)
+    file_id = _record_file(file_path)
+    result = get_file_info(file_path)
+    save_analysis(file_id, "file_info", result)
+    return result
 
 
 @app.post("/merge")
@@ -261,6 +266,9 @@ async def merge_files(files: list[UploadFile] = File(...)):
     result = merge_excel_files(file_paths, output_path=output_path)
     if "error" in result:
         raise HTTPException(400, result["error"])
+    file_id = _record_file(output_path)
+    save_generated_file(file_id, "merged_excel", output_path)
+    save_analysis(file_id, "merge", result)
     return result
 
 
@@ -274,7 +282,9 @@ async def process_with_prompt(
         raise HTTPException(400, "Prompt cannot be empty")
     _validate_excel_filename(file.filename)
     file_path = save_upload(file)
+    file_id = _record_file(file_path)
     result = process_prompt(file_path, prompt)
+    save_analysis(file_id, "process_prompt", {"prompt": prompt, "result": result})
     return {"result": result}
 
 

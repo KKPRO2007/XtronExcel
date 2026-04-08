@@ -41,6 +41,20 @@ interface WorkspaceIntent {
   questions: string[]
 }
 
+interface AnalysisWorkspaceState {
+  kind: 'analysis' | 'chart' | 'document' | 'file'
+  title: string
+  description: string
+  rows?: any[][]
+  data?: any[]
+  chartType?: string
+  chartDataKey?: string
+  documentType?: string
+  documentLength?: 'short' | 'medium' | 'long'
+  content?: string
+  createdAt: string
+}
+
 type PythonAction = 'analyze' | 'read' | 'clean' | 'chart' | 'report' | 'excel' | 'process' | 'template'
 
 interface PythonOutput {
@@ -220,6 +234,7 @@ export default function ExcelSheet() {
   const [previewNote, setPreviewNote] = useState('')
   const [aiStatus, setAiStatus] = useState<{ tone: 'processing' | 'ready' | 'applied'; text: string } | null>(null)
   const [workspaceIntent, setWorkspaceIntent] = useState<WorkspaceIntent | null>(null)
+  const [analysisWorkspace, setAnalysisWorkspace] = useState<AnalysisWorkspaceState | null>(null)
 
   // Create
   const [createPrompt, setCreatePrompt] = useState('')
@@ -242,7 +257,7 @@ export default function ExcelSheet() {
     }, 3000)
   }
 
-  const effectiveOffline = workMode === 'offline' || !networkAvailable || !backendOnline
+  const effectiveOffline = false
   const offlineReason = !networkAvailable
     ? 'No network detected. Switching to local offline tools.'
     : !backendOnline
@@ -253,8 +268,6 @@ export default function ExcelSheet() {
     { id: 'sheet', label: 'Sheet View', disabled: !currentFile },
     { id: 'analyze', label: 'Analysis', disabled: !currentFile },
     { id: 'charts', label: 'Charts', disabled: !currentFile },
-    { id: 'create', label: effectiveOffline ? 'AI Create' : 'Create New' },
-    ...(effectiveOffline ? [{ id: 'offline' as MainTab, label: 'Offline Lab' }] : []),
   ]
 
   useEffect(() => {
@@ -291,7 +304,7 @@ export default function ExcelSheet() {
   }, [])
 
   useEffect(() => {
-    if (!effectiveOffline && activeTab === 'offline') setActiveTab('create')
+    if (!effectiveOffline && activeTab === 'offline') setActiveTab('files')
   }, [effectiveOffline, activeTab])
 
   useEffect(() => {
@@ -377,7 +390,15 @@ export default function ExcelSheet() {
     setSheetNames(['Sheet1'])
     setStats(null)
     setActiveSheetIdx(0)
-    setActiveTab('sheet')
+    setAnalysisWorkspace({
+      kind: 'file',
+      title: file.name,
+      description: 'Created from chat. Review the preview here, then switch to Sheet View if you want to edit cells manually.',
+      rows: rows || [],
+      data: [],
+      createdAt: new Date().toISOString()
+    })
+    setActiveTab('analyze')
     setAiStatus({ tone: 'ready', text: `Opened ${file.name} from AI chat. You can edit cells, save the workbook, or ask for more changes.` })
     showToast(`Opened ${file.name}`)
     try {
@@ -492,8 +513,17 @@ export default function ExcelSheet() {
       chartDataKey: nextKey,
       createdAt: Date.now()
     })
-    setAiStatus({ tone: 'ready', text: 'AI chart preview is ready. Apply it to open the chart workspace, or discard it.' })
-    setActiveTab('charts')
+    setAnalysisWorkspace({
+      kind: 'chart',
+      title: title || 'AI chart preview ready',
+      description: `Prepared a ${nextType} chart using ${nextKey} insights from the current sheet.`,
+      chartType: nextType,
+      chartDataKey: nextKey,
+      data: [],
+      createdAt: new Date().toISOString()
+    })
+    setAiStatus({ tone: 'ready', text: 'AI chart preview is ready in Excel. Apply it to keep the chart suggestion, or discard it.' })
+    setActiveTab('analyze')
     showToast(title || 'Chart preview ready')
   }
 
@@ -509,6 +539,34 @@ export default function ExcelSheet() {
     } else {
       setAiStatus({ tone: 'ready', text: 'Chart workspace opened from chat. Choose the visual style and data slice, then apply the preview.' })
     }
+  }
+
+  const handleChatAnalysisResult = (result: any) => {
+    setAnalysisWorkspace({
+      kind: result.kind || 'analysis',
+      title: result.title || 'AI analysis result',
+      description: result.description || 'Chat generated a result for the current workbook.',
+      rows: result.rows || [],
+      data: result.data || [],
+      chartType: result.chartType,
+      chartDataKey: result.chartDataKey,
+      createdAt: result.createdAt || new Date().toISOString()
+    })
+    setActiveTab('analyze')
+  }
+
+  const handleChatDocumentResult = (doc: { id: string; title: string; type: string; content: string; createdAt: string; length: 'short' | 'medium' | 'long' }) => {
+    setAnalysisWorkspace({
+      kind: 'document',
+      title: doc.title,
+      description: `Generated a ${doc.length} ${doc.type}. You can edit the draft here or continue refining it in chat.`,
+      content: doc.content,
+      documentType: doc.type,
+      documentLength: doc.length,
+      data: [],
+      createdAt: doc.createdAt
+    })
+    setActiveTab('analyze')
   }
 
   useEffect(() => {
@@ -706,6 +764,16 @@ export default function ExcelSheet() {
     try {
       const res = await api.excelCommand(currentFile.id, cmdInput)
       setCmdResult(res)
+      setAnalysisWorkspace({
+        kind: 'analysis',
+        title: 'AI analysis result',
+        description: res?.message || 'Command result is ready.',
+        rows: Array.isArray(res?.data) && res.data.length
+          ? [Object.keys(res.data[0]), ...res.data.slice(0, 12).map((row: any) => Object.values(row))]
+          : [],
+        data: res?.data || [],
+        createdAt: new Date().toISOString()
+      })
     } catch (e: any) { 
       showToast(e.message || 'Command failed', 'err') 
     }
@@ -769,6 +837,17 @@ export default function ExcelSheet() {
 
   const curStats = useMemo(() => stats?.[sheetNames[activeSheetIdx]], [stats, sheetNames, activeSheetIdx])
   const rawGridValues = useMemo(() => grid.map(row => row.map(cell => cell.value)), [grid])
+
+  const downloadAnalysisDocument = () => {
+    if (analysisWorkspace?.kind !== 'document' || !analysisWorkspace.content) return
+    const blob = new Blob([analysisWorkspace.content], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${analysisWorkspace.title || 'document'}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   const getServerFileUrl = (file: any) => {
     const rawUrl = String(file?.url || '')
@@ -888,19 +967,11 @@ export default function ExcelSheet() {
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: backendOnline ? '#22c55e' : '#ef4444' }} />
             <span style={{ color: 'var(--text-muted)' }}>{backendOnline ? 'Backend connected' : 'Backend offline'}</span>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: pythonOnline ? '#22c55e' : '#f59e0b', marginLeft: 10 }} />
-            <span style={{ color: 'var(--text-muted)' }}>{pythonOnline ? 'Offline tools ready' : 'Offline tools unavailable'}</span>
-            <div style={{ marginLeft: 10, padding: '4px 10px', borderRadius: 999, background: effectiveOffline ? 'rgba(245,158,11,0.14)' : 'rgba(59,130,246,0.12)', color: effectiveOffline ? '#b45309' : '#2563eb', fontWeight: 700 }}>
-              {effectiveOffline ? 'Offline mode active' : 'AI mode active'}
+            <span style={{ color: 'var(--text-muted)' }}>{pythonOnline ? 'Local tools ready' : 'Local tools unavailable'}</span>
+            <div style={{ marginLeft: 10, padding: '4px 10px', borderRadius: 999, background: 'rgba(59,130,246,0.12)', color: '#2563eb', fontWeight: 700 }}>
+              Online AI workspace
             </div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button className={effectiveOffline ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm'} onClick={() => void switchWorkMode('offline')} disabled={modeSwitching}>
-                  {modeSwitching && effectiveOffline ? 'Going Offline...' : 'Offline'}
-                </button>
-                <button className={!effectiveOffline ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm'} onClick={() => void switchWorkMode('online')} disabled={modeSwitching || !networkAvailable || !backendOnline}>
-                  {modeSwitching && !effectiveOffline ? 'Going Online...' : 'Online AI'}
-                </button>
-              </div>
               {currentFile && (
                 <button className="btn btn-outline btn-sm" onClick={saveCurrentSheet} disabled={savingSheet}>
                   {savingSheet ? 'Saving...' : 'Save Workbook'}
@@ -924,12 +995,6 @@ export default function ExcelSheet() {
               </button>
             ))}
           </div>
-
-          {modeSwitching && (
-            <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', background: 'rgba(15,23,42,0.92)', color: '#f8fafc', fontSize: '0.8rem' }}>
-              {workMode === 'online' ? 'Going to offline mode. Local workbook tools are being prepared...' : 'Activating online AI mode. Reconnecting workspace services...'}
-            </div>
-          )}
 
           {/* FORMULA BAR */}
           {activeTab === 'sheet' && currentFile && selectedCell && (
@@ -1050,88 +1115,125 @@ export default function ExcelSheet() {
           )}
 
           {/* TAB: ANALYSIS */}
-          {activeTab === 'analyze' && curStats && (
+          {activeTab === 'analyze' && currentFile && (
             <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 0.85fr', gap: 14, marginBottom: 18 }}>
-                <div style={{ padding: '16px 18px', borderRadius: 16, background: effectiveOffline ? 'linear-gradient(135deg, rgba(148,163,184,0.78), rgba(30,41,59,0.94))' : 'linear-gradient(135deg, rgba(37,99,235,0.16), rgba(15,23,42,0.96))', border: effectiveOffline ? '1px solid rgba(148,163,184,0.3)' : '1px solid rgba(96,165,250,0.18)', boxShadow: effectiveOffline ? '0 20px 40px rgba(148,163,184,0.16)' : 'none' }}>
-                  <div style={{ fontSize: '0.72rem', color: effectiveOffline ? '#dbeafe' : '#bfdbfe', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{effectiveOffline ? 'Offline Analysis Workspace' : 'AI Analysis Studio'}</div>
-                  <div style={{ fontSize: '1.02rem', color: '#f8fafc', fontWeight: 700, marginBottom: 6 }}>{effectiveOffline ? 'Local insights linked to your workbook' : 'Live insights linked to your workbook'}</div>
-                  <div style={{ fontSize: '0.8rem', color: effectiveOffline ? '#eff6ff' : '#dbeafe', lineHeight: 1.65 }}>
-                    {effectiveOffline ? offlineReason : 'Use chat or the controls here to ask for risks, comparisons, summaries, and recommended visuals. The analysis prompt stays connected to the current sheet.'}
+                <div style={{ padding: '16px 18px', borderRadius: 16, background: 'linear-gradient(135deg, rgba(37,99,235,0.16), rgba(15,23,42,0.96))', border: '1px solid rgba(96,165,250,0.18)' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#bfdbfe', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Analysis Hub</div>
+                  <div style={{ fontSize: '1.02rem', color: '#f8fafc', fontWeight: 700, marginBottom: 6 }}>Chat results appear here</div>
+                  <div style={{ fontSize: '0.8rem', color: '#dbeafe', lineHeight: 1.65 }}>
+                    Create files, ask for analysis, generate charts, or create documents from chat. This area stays empty until a command produces something.
                   </div>
                 </div>
-                <div style={{ padding: '16px 18px', borderRadius: 16, background: effectiveOffline ? 'rgba(15,23,42,0.96)' : 'var(--surface)', border: effectiveOffline ? '1px solid rgba(71,85,105,0.5)' : '1px solid var(--border)', boxShadow: effectiveOffline ? '0 18px 34px rgba(15,23,42,0.14)' : 'none' }}>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>{effectiveOffline ? 'Offline Command' : 'AI Prompt'}</div>
-                  <input value={cmdInput} onChange={e => setCmdInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (effectiveOffline ? void handleOfflineCommand(cmdInput || 'analyze data') : runCommand())} placeholder={effectiveOffline ? 'Try analyze data, summary statistics, or quick audit...' : 'Ask for insight, risk, ranking, summary, or a recommendation...'} style={{ width: '100%', padding: '10px 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)', marginBottom: 10 }} />
-                  <button className="btn btn-primary btn-sm" onClick={effectiveOffline ? () => void handleOfflineCommand(cmdInput || 'analyze data') : runCommand} disabled={effectiveOffline ? (!!pythonBusy || !pythonOnline || !currentFile) : (cmdLoading || !cmdInput.trim())} style={{ width: '100%', justifyContent: 'center' }}>
-                    {effectiveOffline ? (pythonBusy === 'process' ? 'Running Offline Analysis...' : 'Run Offline Analysis') : (cmdLoading ? 'Analyzing...' : 'Run AI Analysis')}
+                <div style={{ padding: '16px 18px', borderRadius: 16, background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Quick Analysis</div>
+                  <input value={cmdInput} onChange={e => setCmdInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && runCommand()} placeholder='Try "compare sections" or "show top risks"' style={{ width: '100%', padding: '10px 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)', marginBottom: 10 }} />
+                  <button className="btn btn-primary btn-sm" onClick={runCommand} disabled={cmdLoading || !cmdInput.trim()} style={{ width: '100%', justifyContent: 'center' }}>
+                    {cmdLoading ? 'Analyzing...' : 'Run Analysis'}
                   </button>
                 </div>
               </div>
 
-              {effectiveOffline && (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
-                  {['analyze data', 'summary statistics', 'show null values', 'quick audit'].map(command => (
-                    <button key={command} className="btn btn-sm" onClick={() => void handleOfflineCommand(command)} style={{ background: 'rgba(15,23,42,0.9)', color: '#f8fafc', border: '1px solid rgba(71,85,105,0.45)' }}>
-                      {command}
-                    </button>
-                  ))}
+              {!analysisWorkspace ? (
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '48px 24px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 38, marginBottom: 12 }}>AI</div>
+                  <div style={{ fontSize: '1rem', color: 'var(--text)', fontWeight: 700, marginBottom: 8 }}>Write commands in chat to see results here</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', maxWidth: 560, margin: '0 auto', lineHeight: 1.7 }}>
+                    Example: create a new sheet, analyze this file, make a bar chart, or create a short report.
+                  </div>
                 </div>
-              )}
-
-              {workspaceIntent?.tab === 'analyze' && workspaceIntent.questions.length > 0 && (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
-                  {workspaceIntent.questions.map(question => (
-                    <button key={question} className="btn btn-outline btn-sm" onClick={() => applyIntentQuestion(question)}>
-                      {question}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
-                <div style={{ background: 'var(--surface)', padding: 12, borderRadius: 8, textAlign: 'center', border: '1px solid var(--border)' }}><div style={{ fontSize: 24, fontWeight: 700, color: '#3b82f6' }}>{curStats.total}</div><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Total Students</div></div>
-                <div style={{ background: 'var(--surface)', padding: 12, borderRadius: 8, textAlign: 'center', border: '1px solid var(--border)' }}><div style={{ fontSize: 24, fontWeight: 700, color: '#22c55e' }}>{curStats.passed}</div><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Passed</div></div>
-                <div style={{ background: 'var(--surface)', padding: 12, borderRadius: 8, textAlign: 'center', border: '1px solid var(--border)' }}><div style={{ fontSize: 24, fontWeight: 700, color: '#ef4444' }}>{curStats.failed}</div><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Failed</div></div>
-                <div style={{ background: 'var(--surface)', padding: 12, borderRadius: 8, textAlign: 'center', border: '1px solid var(--border)' }}><div style={{ fontSize: 24, fontWeight: 700, color: '#f97316' }}>{curStats.passRate}%</div><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Pass Rate</div></div>
-              </div>
-
-              {cmdResult && (
-                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 14 }}>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--green)', fontWeight: 700, marginBottom: 8 }}>{cmdResult.message || 'AI analysis result'}</div>
-                  {Array.isArray(cmdResult.data) && cmdResult.data.length > 0 ? (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
-                        <thead>
-                          <tr>
-                            {Object.keys(cmdResult.data[0]).slice(0, 5).map(key => (
-                              <th key={key} style={{ padding: '6px 8px', textAlign: 'left', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>{key}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {cmdResult.data.slice(0, 10).map((row: any, idx: number) => (
-                            <tr key={idx}>
-                              {Object.values(row).slice(0, 5).map((value: any, cellIdx: number) => (
-                                <td key={cellIdx} style={{ padding: '6px 8px', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border)' }}>{String(value)}</td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+              ) : (
+                <div style={{ display: 'grid', gap: 16 }}>
+                  <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 10 }}>
+                      <div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{analysisWorkspace.kind}</div>
+                        <div style={{ fontSize: '1.05rem', color: 'var(--text)', fontWeight: 700, marginTop: 4 }}>{analysisWorkspace.title}</div>
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{new Date(analysisWorkspace.createdAt).toLocaleString()}</div>
                     </div>
-                  ) : (
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Run a prompt like "compare sections" or "show top risks" to get a live AI answer here.</div>
-                  )}
-                </div>
-              )}
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.65 }}>{analysisWorkspace.description}</div>
+                  </div>
 
-              {effectiveOffline && (
-                <div style={{ marginTop: 16, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 14 }}>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--green)', fontWeight: 700, marginBottom: 8 }}>Offline workbook result</div>
-                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: '0.72rem', lineHeight: 1.55, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono, Consolas, monospace)' }}>
-                    {pythonResult ? JSON.stringify(pythonResult, null, 2) : 'Run an offline analysis command to see local workbook results here.'}
-                  </pre>
+                  {analysisWorkspace.kind === 'chart' && (
+                    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 16 }}>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: 14 }}>
+                        Chart type: <strong>{analysisWorkspace.chartType}</strong> | Data source: <strong>{analysisWorkspace.chartDataKey}</strong>
+                      </div>
+                      {!chartRows.length ? (
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>No chartable summary is available for this workbook yet.</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {chartRows.slice(0, 12).map((row: any, idx: number) => {
+                            const label = getChartLabel(row)
+                            const value = getChartValue(row)
+                            const max = Math.max(...chartRows.map((item: any) => getChartValue(item)), 1)
+                            const width = `${Math.max((value / max) * 100, 6)}%`
+                            return (
+                              <div key={`${label}_${idx}`} style={{ display: 'grid', gridTemplateColumns: '140px 1fr 60px', gap: 10, alignItems: 'center' }}>
+                                <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</div>
+                                <div style={{ height: 28, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 999, overflow: 'hidden' }}>
+                                  <div style={{ width, height: '100%', background: analysisWorkspace.chartType === 'pie' ? 'linear-gradient(90deg, #22c55e, #3b82f6)' : analysisWorkspace.chartType === 'line' ? 'linear-gradient(90deg, #f59e0b, #ef4444)' : 'linear-gradient(90deg, #60a5fa, #2563eb)', borderRadius: 999 }} />
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text)', textAlign: 'right', fontWeight: 600 }}>{value}</div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {analysisWorkspace.kind === 'document' && (
+                    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 16 }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Type: <strong>{analysisWorkspace.documentType}</strong></div>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Length: <strong>{analysisWorkspace.documentLength}</strong></div>
+                        <button className="btn btn-outline btn-sm" onClick={downloadAnalysisDocument}>Download .txt</button>
+                      </div>
+                      <textarea
+                        value={analysisWorkspace.content || ''}
+                        onChange={e => setAnalysisWorkspace(prev => prev && prev.kind === 'document' ? { ...prev, content: e.target.value } : prev)}
+                        style={{ width: '100%', minHeight: 340, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 12, color: 'var(--text)', padding: 14, resize: 'vertical' }}
+                      />
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 10 }}>
+                        You can edit this draft here, or ask chat to rewrite it as short, medium, long, formal, simpler, or more detailed.
+                      </div>
+                    </div>
+                  )}
+
+                  {(analysisWorkspace.kind === 'analysis' || analysisWorkspace.kind === 'file') && (
+                    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 16 }}>
+                      {analysisWorkspace.rows && analysisWorkspace.rows.length > 0 ? (
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.74rem' }}>
+                            <thead>
+                              <tr>
+                                {(analysisWorkspace.rows[0] || []).slice(0, 8).map((cell, idx) => (
+                                  <th key={idx} style={{ padding: '8px 10px', textAlign: 'left', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>{String(cell)}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {analysisWorkspace.rows.slice(1, 13).map((row, rowIdx) => (
+                                <tr key={rowIdx}>
+                                  {row.slice(0, 8).map((cell: any, colIdx: number) => (
+                                    <td key={colIdx} style={{ padding: '8px 10px', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border)' }}>{String(cell ?? '')}</td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : Array.isArray(analysisWorkspace.data) && analysisWorkspace.data.length > 0 ? (
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: '0.74rem', lineHeight: 1.6, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono, Consolas, monospace)' }}>
+                          {JSON.stringify(analysisWorkspace.data, null, 2)}
+                        </pre>
+                      ) : (
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>No preview rows were returned for this result.</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1553,14 +1655,12 @@ export default function ExcelSheet() {
           currentFile={currentFile}
           rawRows={rawGridValues}
           stats={curStats}
-          offlineMode={effectiveOffline}
           panelWidth={aiPanelWidth}
-          offlineCommands={OFFLINE_COMMANDS}
           onGridUpdate={handleAIGridUpdate}
           onNewFile={handleOpenGeneratedFile}
           onShowChart={handleAIChartRequest}
-          onWorkspaceIntent={handleWorkspaceIntent}
-          onOfflineCommand={command => void handleOfflineCommand(command)}
+          onAnalysisResult={handleChatAnalysisResult}
+          onDocumentResult={handleChatDocumentResult}
           onApplyPreview={applyAiPreview}
           onDiscardPreview={discardAiPreview}
           onUndoLastChange={undoAiApply}
@@ -1569,3 +1669,4 @@ export default function ExcelSheet() {
     </div>
   )
 }
+
