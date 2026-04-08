@@ -7,11 +7,7 @@ import Dashboard from './pages/Dashboard'
 import ExcelSheet from './pages/ExcelSheet'
 import Settings from './pages/Settings'
 import FileManager from './pages/FileManager'
-import Workflow from './pages/Workflow'
 import Documents from './pages/Documents'
-import VoiceAssistant from './pages/VoiceAssistant'
-import PowerPointStudio from './pages/PowerPointStudio'
-import PluginMarketplace from './pages/PluginMarketplace'
 
 export default function App() {
   useEffect(() => {
@@ -35,11 +31,7 @@ export default function App() {
         <Route path="/excel" element={<ExcelSheet />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/file-manager" element={<FileManager />} />
-        <Route path="/workflow" element={<Workflow />} />
         <Route path="/documents" element={<Documents />} />
-        <Route path="/voice" element={<VoiceAssistant />} />
-        <Route path="/powerpoint" element={<PowerPointStudio />} />
-        <Route path="/plugins" element={<PluginMarketplace />} />
       </Routes>
     </HashRouter>
   )

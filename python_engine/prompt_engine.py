@@ -4,7 +4,6 @@ from report_generator import generate_report
 from data_cleaning import clean_data
 from excel_generator import read_excel, generate_advanced_excel, create_excel_template
 from word_generator import generate_word_report
-from ppt_generator import generate_ppt
 from file_segmentation import (
     segment_by_column, segment_by_row_count,
     segment_by_date_column, merge_excel_files, get_file_info
@@ -19,7 +18,6 @@ KEYWORD_MAP = {
     "read":     ["read", "show data", "display", "preview", "view"],
     "excel":    ["excel output", "generate excel", "advanced excel", "format excel"],
     "word":     ["word", "docx", "document", "word report", "word doc"],
-    "ppt":      ["ppt", "powerpoint", "presentation", "slides", "deck"],
     "segment":  ["segment", "split", "divide", "chunk", "partition"],
     "merge":    ["merge", "combine", "join files"],
     "template": ["template", "blank excel", "sample excel", "create sheet"],
@@ -84,9 +82,6 @@ def process_prompt(file_path: str, prompt: str) -> dict:
     elif task == "word":
         return {"task": "word", "result": generate_word_report(file_path)}
 
-    elif task == "ppt":
-        return {"task": "ppt", "result": generate_ppt(file_path)}
-
     elif task == "segment":
         col = detect_segment_column(prompt, file_path)
         if col:
@@ -106,7 +101,7 @@ def process_prompt(file_path: str, prompt: str) -> dict:
                 "Could not understand your prompt. Try: "
                 "'analyze data', 'create chart', 'generate report', "
                 "'clean data', 'show data', 'generate excel', "
-                "'create word doc', 'create ppt', 'segment by Region', "
+                "'create word doc', 'segment by Region', "
                 "'file info'."
             ),
         }

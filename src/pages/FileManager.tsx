@@ -199,26 +199,7 @@ export default function FileManager() {
         return
       }
       if (kind === 'presentation' || (kind === 'text' && /presentation|deck|slides|slide/i.test(file.name))) {
-        let parsed: any = null
-        try { parsed = JSON.parse(raw) } catch {}
-        const slides = Array.isArray(parsed?.slides)
-          ? parsed.slides.map((slide: any, index: number) => ({
-              id: index + 1,
-              title: String(slide.title || `Slide ${index + 1}`),
-              content: String(slide.content || ''),
-              chart: slide.chart ? String(slide.chart) : '',
-              notes: slide.notes ? String(slide.notes) : ''
-            }))
-          : [{ id: 1, title: file.name.replace(/\.[^.]+$/, ''), content: raw, chart: '', notes: '' }]
-        localStorage.setItem('ai_ppt_slides', JSON.stringify(slides))
-        localStorage.setItem('ai_ppt_draft_meta', JSON.stringify({
-          prompt: parsed?.deck_title || file.name.replace(/\.[^.]+$/, ''),
-          theme: 'Executive Blue',
-          audience: 'Management',
-          goal: parsed?.subtitle || 'Present workbook insights'
-        }))
-        localStorage.setItem('ai_ppt_context', `Loaded from File Manager\nSource file: ${file.name}\nDepartment: ${file.department || 'general'}`)
-        navigate('/powerpoint')
+        alert('Presentation restore has been removed from this app.')
       }
     } catch (error) {
       console.error('Open file failed:', error)
@@ -374,7 +355,7 @@ export default function FileManager() {
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtSize(f.size)}</div>
                           <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{fmtDate(f.uploadedAt)}</div>
                           <div style={{ display: 'flex', gap: 4 }}>
-                            {['excel', 'document', 'presentation'].includes(kind) && (
+                            {['excel', 'document'].includes(kind) && (
                               <button className="btn btn-xs btn-outline" onClick={e => { e.stopPropagation(); openManagedFile(f) }}>{kind === 'excel' ? 'Open' : 'Restore'}</button>
                             )}
                             <button className="btn btn-xs btn-ghost" style={{ color: 'var(--red)' }} onClick={e => { e.stopPropagation(); handleDelete(f.id) }}>✕</button>
@@ -399,7 +380,7 @@ export default function FileManager() {
                           <div style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
                           <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 4 }}>{FILE_THEME[kind].label} · {fmtSize(f.size)}</div>
                           <div style={{ display: 'flex', gap: 4, marginTop: 8, justifyContent: 'center' }}>
-                            {['excel', 'document', 'presentation'].includes(kind) && <button className="btn btn-xs btn-outline" onClick={() => openManagedFile(f)}>{kind === 'excel' ? 'Open' : 'Restore'}</button>}
+                            {['excel', 'document'].includes(kind) && <button className="btn btn-xs btn-outline" onClick={() => openManagedFile(f)}>{kind === 'excel' ? 'Open' : 'Restore'}</button>}
                             <button className="btn btn-xs btn-ghost" style={{ color: 'var(--red)' }} onClick={() => handleDelete(f.id)}>✕</button>
                           </div>
                         </div>
@@ -510,3 +491,4 @@ export default function FileManager() {
     </div>
   )
 }
+

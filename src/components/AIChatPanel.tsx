@@ -1,6 +1,5 @@
 import { memo, useState, useRef, useEffect, useCallback } from 'react'
 import { useSelector } from 'react-redux'
-import { useNavigate } from 'react-router-dom'
 import { RootState } from '../index'
 
 interface Msg {
@@ -16,15 +15,13 @@ interface Props {
   currentFile?: any
   rawRows?: any[][]
   stats?: any
-  offlineMode?: boolean
   panelWidth?: number
   initialCollapsed?: boolean
-  offlineCommands?: Array<{ command: string; effect: string }>
   onGridUpdate?: (rows: string[][], desc: string) => void
   onNewFile?: (file: any, rows: any[][]) => void
   onShowChart?: (config: { chartType: string, chartDataKey: string, title: string }) => void
-  onWorkspaceIntent?: (intent: { tab: 'analyze' | 'charts' | 'create'; prompt: string; questions: string[] }) => void
-  onOfflineCommand?: (command: string) => void
+  onAnalysisResult?: (result: any) => void
+  onDocumentResult?: (doc: { id: string; title: string; type: string; content: string; createdAt: string; length: 'short' | 'medium' | 'long' }) => void
   onApplyPreview?: () => void
   onDiscardPreview?: () => void
   onUndoLastChange?: () => void
@@ -303,43 +300,38 @@ export default function AIChatPanel({
   currentFile,
   rawRows,
   stats,
-  offlineMode = false,
   panelWidth = 360,
   initialCollapsed = false,
-  offlineCommands = [],
   onGridUpdate,
   onNewFile,
   onShowChart,
-  onWorkspaceIntent,
-  onOfflineCommand,
+  onAnalysisResult,
+  onDocumentResult,
   onApplyPreview,
   onDiscardPreview,
   onUndoLastChange
 }: Props) {
-  const navigate = useNavigate()
   const user = useSelector((s: RootState) => s.app.user)
+  const offlineMode = false
   const [collapsed, setCollapsed] = useState(initialCollapsed)
-  const [tab, setTab] = useState<'chat' | 'generate' | 'formula' | 'settings'>('chat')
+  const [tab, setTab] = useState<'chat' | 'settings'>('chat')
 
   const [msgs, setMsgs] = useState<Msg[]>([{
     id: 'offline_mode_notice',
     role: 'ai',
     time: now(),
-    content: `Hi ${user?.name?.split(' ')[0] || 'there'}! I'm your assistant.\n\n${offlineMode ? 'Offline mode is active. Local workbook help is ready.' : 'AI mode is active. Ask for edits, summaries, formulas, or new workbook ideas.'}`
+    content: `Hi ${user?.name?.split(' ')[0] || 'there'}! I'm your assistant.\n\nAI mode is active. Ask for edits, summaries, formulas, or new workbook ideas.`
   }])
   const [inputDisplay, setInputDisplay] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [busy, setBusy] = useState(false)
   const msgsEndRef = useRef<HTMLDivElement>(null)
 
-  const [formulaDesc, setFormulaDesc] = useState('')
-  const [formulaRes, setFormulaRes] = useState<any>(null)
-  const [formulaBusy, setFormulaBusy] = useState(false)
-
   const [genPrompt, setGenPrompt] = useState('')
   const [genBusy, setGenBusy] = useState(false)
   const [sheetPrompt, setSheetPrompt] = useState('')
   const [sheetBusy, setSheetBusy] = useState(false)
+  const [pendingDocRequest, setPendingDocRequest] = useState<{ text: string; contextPayload: any } | null>(null)
 
   const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('gemini_key') || '')
   const [hfKey, setHfKey] = useState(() => localStorage.getItem('hf_key') || '')
@@ -349,7 +341,6 @@ export default function AIChatPanel({
   const [showHF, setShowHF] = useState(false)
   const [keyStatus, setKeyStatus] = useState({ gemini: !!localStorage.getItem('gemini_key'), hf: !!localStorage.getItem('hf_key') })
   const [saving, setSaving] = useState(false)
-  const wasOfflineRef = useRef(offlineMode)
   const chatBodyRef = useRef<HTMLDivElement>(null)
   const chatScrollTopRef = useRef(0)
   const shouldStickToBottomRef = useRef(true)
@@ -370,39 +361,13 @@ export default function AIChatPanel({
   }, [tab])
 
   useEffect(() => {
-    if (offlineMode && (tab === 'generate' || tab === 'formula')) setTab('chat')
-  }, [offlineMode, tab])
-
-  useEffect(() => {
-    const baseGreeting = offlineMode
-      ? `Hi ${user?.name?.split(' ')[0] || 'there'}! I'm your assistant.\n\nOffline mode is active. Local workbook help is ready.`
-      : `Hi ${user?.name?.split(' ')[0] || 'there'}! I'm your assistant.\n\nAI mode is active. Ask for edits, summaries, formulas, or new workbook ideas.`
+    const baseGreeting = `Hi ${user?.name?.split(' ')[0] || 'there'}! I'm your assistant.\n\nAI mode is active. Ask for edits, summaries, formulas, or new workbook ideas.`
 
     setMsgs(prev => {
       const rest = prev.filter(msg => msg.id !== 'offline_mode_notice' && !/I'm your AI Excel assistant|Open a file and ask me anything/i.test(msg.content))
       return [{ id: 'offline_mode_notice', role: 'ai', time: now(), content: baseGreeting }, ...rest]
     })
-  }, [offlineMode, user?.name])
-
-  useEffect(() => {
-    if (offlineMode && !wasOfflineRef.current) {
-      setMsgs(prev => {
-        const keep = prev.filter(msg => {
-          if (msg.id === 'offline_mode_notice') return false
-          if (msg.role === 'user') return true
-          if (msg.role === 'system') return /Offline mode keeps chat local/i.test(msg.content)
-          return /Offline (analysis|chart|workbook) mode is active/i.test(msg.content)
-        })
-        return [{
-          id: 'offline_mode_notice',
-          role: 'ai',
-          time: now(),
-          content: `Hi ${user?.name?.split(' ')[0] || 'there'}! I'm your assistant.\n\nOffline mode is active. Local workbook help is ready.`
-        }, ...keep]
-      })
-    }
-    wasOfflineRef.current = offlineMode
-  }, [offlineMode, user?.name])
+  }, [user?.name])
 
   useEffect(() => {
     const g = localStorage.getItem('gemini_key')
@@ -424,6 +389,61 @@ export default function AIChatPanel({
   const updateMsg = useCallback((id: string, content: string, done = false) => {
     setMsgs(prev => prev.map(m => m.id === id ? { ...m, content, isStreaming: !done } : m))
   }, [])
+
+  const generateDocumentFromPrompt = useCallback(async (
+    requestText: string,
+    contextPayload: any,
+    requestedLength: 'short' | 'medium' | 'long'
+  ) => {
+    const docType =
+      /\bproposal\b/i.test(requestText) ? 'proposal' :
+      /\bnotice\b/i.test(requestText) ? 'notice' :
+      /\breport\b/i.test(requestText) ? 'report' :
+      'document'
+
+    const res = await fetch('http://localhost:3001/api/documents/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: docType,
+        data: {
+          prompt: `${requestText}\n\nLength: ${requestedLength}. Keep the document ${requestedLength} unless the user explicitly asks otherwise.`,
+          notes: [
+            `Source sheet: ${contextPayload.fileName}`,
+            `Rows: ${contextPayload.data.rowCount}`,
+            contextPayload.data.headers?.length ? `Columns: ${contextPayload.data.headers.join(', ')}` : '',
+            contextPayload.data.sampleRows?.length
+              ? `Sample rows:\n${contextPayload.data.sampleRows.map((row: any[]) => row.map(cell => String(cell ?? '')).join(' | ')).join('\n')}`
+              : ''
+          ].filter(Boolean).join('\n'),
+          user: user?.name,
+          department: user?.department
+        },
+        title: requestText.slice(0, 60)
+      })
+    })
+    const result = await res.json()
+    if (!res.ok) throw new Error(result.error || 'Document generation failed')
+
+    const doc = {
+      ...result,
+      id: result.id || `doc_${Date.now()}`,
+      title: asText(result.title || requestText.slice(0, 50)),
+      type: result.type || docType,
+      content: asText(result.content),
+      createdAt: result.createdAt || new Date().toISOString(),
+      length: requestedLength
+    } as const
+
+    try {
+      const existing = JSON.parse(localStorage.getItem('ai_documents') || '[]')
+      localStorage.setItem('ai_documents', JSON.stringify([doc, ...existing.filter((item: any) => item.id !== doc.id)]))
+      localStorage.setItem('ai_documents_last_open', doc.id)
+    } catch {}
+
+    onDocumentResult?.(doc)
+    addMsg('ai', `Created **${doc.title}** as a ${requestedLength} document. The preview is ready in Analysis.`)
+  }, [addMsg, onDocumentResult, user?.department, user?.name])
 
   const saveKeys = async () => {
     setSaving(true)
@@ -493,6 +513,29 @@ export default function AIChatPanel({
     if (!text || busy) return
     setBusy(true)
     addMsg('user', text)
+    const requestedLength = /\bshort\b/i.test(text)
+      ? 'short'
+      : /\b(mid|medium)\b/i.test(text)
+        ? 'medium'
+        : /\blong\b/i.test(text)
+          ? 'long'
+          : null
+
+    if (pendingDocRequest) {
+      if (!requestedLength) {
+        addMsg('ai', 'Reply with one document size: `short`, `medium`, or `long`.')
+        setBusy(false)
+        return
+      }
+      try {
+        await generateDocumentFromPrompt(pendingDocRequest.text, pendingDocRequest.contextPayload, requestedLength)
+      } catch (e: any) {
+        addMsg('system', `Document request failed: ${e.message}`)
+      }
+      setPendingDocRequest(null)
+      setBusy(false)
+      return
+    }
     const lowerText = text.toLowerCase()
     if (/\b(apply|confirm)\b.*\b(preview|changes?)\b/i.test(text) && onApplyPreview) {
       onApplyPreview()
@@ -529,52 +572,6 @@ export default function AIChatPanel({
       setBusy(false)
       return
     }
-    if (offlineMode) {
-      if (/\b(analy[sz]e|analysis|insight|summary|summarize|explain)\b/i.test(text) && onWorkspaceIntent) {
-        onWorkspaceIntent({
-          tab: 'analyze',
-          prompt: text,
-          questions: ['analyze data', 'summary statistics', 'show null values', 'quick audit']
-        })
-        onOfflineCommand?.(text)
-        addMsg('ai', 'Offline analysis is active. I opened Analysis and sent this command to the local workbook tools.')
-        setBusy(false)
-        return
-      }
-      if (/\b(chart|graph|plot|visuali[sz]e)\b/i.test(text) && onShowChart) {
-        const offlineChartType = lowerText.includes('line') ? 'line' : lowerText.includes('pie') || lowerText.includes('donut') ? 'pie' : 'bar'
-        const offlineChartKey =
-          lowerText.includes('subject') ? 'subject' :
-          lowerText.includes('grade') ? 'grade' :
-          lowerText.includes('score') || lowerText.includes('distribution') ? 'score' :
-          'section'
-        onShowChart({ chartType: offlineChartType, chartDataKey: offlineChartKey, title: `Offline chart: ${text}` })
-        onWorkspaceIntent?.({
-          tab: 'charts',
-          prompt: text,
-          questions: ['create chart', 'bar chart', 'line chart', 'chart top categories']
-        })
-        onOfflineCommand?.(text)
-        addMsg('ai', 'Offline chart mode is active. I opened Charts and sent this command to the local workbook tools.')
-        setBusy(false)
-        return
-      }
-      if (/\b(create|generate|make|clean|report|template|split|segment|export)\b/i.test(text)) {
-        onWorkspaceIntent?.({
-          tab: 'create',
-          prompt: text,
-          questions: ['clean data', 'generate report', 'advanced excel', 'template']
-        })
-        onOfflineCommand?.(text)
-        addMsg('ai', 'Offline workbook mode is active. I sent this command to the local workbook tools.')
-        setBusy(false)
-        return
-      }
-      const examples = offlineCommands.slice(0, 8).map(item => `- \`${item.command}\`: ${item.effect}`).join('\n')
-      addMsg('system', `Offline mode keeps chat local, so cloud AI replies are paused.\n\nYou can still use row edits like \`add Krishna at last line\`, chart requests like \`create chart\`, and workbook actions such as:\n${examples}`)
-      setBusy(false)
-      return
-    }
     const contextPayload = {
       prompt: text,
       fileName: currentFile?.name || 'Current sheet',
@@ -582,54 +579,68 @@ export default function AIChatPanel({
       user: { name: user?.name, department: user?.department }
     }
     if (/\b(create|generate|make)\b.*\b(doc|document|report|notice|proposal)\b/i.test(text)) {
-      sessionStorage.setItem('ai_document_draft', JSON.stringify(contextPayload))
-      navigate('/documents', { state: { aiDraft: contextPayload } })
-      addMsg('ai', 'Moved this request to Documents and prepared an AI draft from the current sheet.')
+      try {
+        if (!requestedLength) {
+          setPendingDocRequest({ text, contextPayload })
+          addMsg('ai', 'What size should the document be: `short`, `medium`, or `long`?')
+        } else {
+          await generateDocumentFromPrompt(text, contextPayload, requestedLength)
+        }
+      } catch (e: any) {
+        addMsg('system', `Document request failed: ${e.message}`)
+      }
       setBusy(false)
       return
     }
-    if (/\b(create|generate|make)\b.*\b(ppt|powerpoint|presentation|deck|slides)\b/i.test(text)) {
-      const pptQuestions = [
-        'Who is the audience for this deck?',
-        'What is the main goal of the presentation?',
-        'How many slides do you want roughly?',
-        'Should the tone be academic, executive, or investor-focused?'
-      ]
-      sessionStorage.setItem('ai_ppt_draft', JSON.stringify(contextPayload))
-      sessionStorage.setItem('ai_ppt_questions', JSON.stringify(pptQuestions))
-      navigate('/powerpoint', { state: { aiDraft: contextPayload } })
-      addMsg('ai', `Moved this request to PPT Generator with your current sheet context.\n\nAnswer these first:\n- ${pptQuestions.join('\n- ')}`)
+    if ((/\b(formula|excel formula|spreadsheet formula|function)\b/i.test(text) || /\b(sumif|sumifs|countif|countifs|averageif|averageifs|vlookup|xlookup|index match|iferror)\b/i.test(text)) && rawRows?.[0]?.length) {
+      try {
+        const headers = rawRows[0].map((h: any) => String(h))
+        const res = await fetch(`${BASE}/formula`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ description: text, headers })
+        })
+        const result = await res.json()
+        if (!res.ok) throw new Error(result.error || 'Formula generation failed')
+        const parts = [
+          result.formula ? `**Formula**\n\`${result.formula}\`` : '',
+          result.explanation ? `**Explanation**\n${result.explanation}` : '',
+          result.example ? `**Example**\n${result.example}` : ''
+        ].filter(Boolean)
+        addMsg('ai', parts.join('\n\n') || 'I generated a formula suggestion.')
+      } catch (e: any) {
+        addMsg('system', `âœ— ${e.message}`)
+      }
       setBusy(false)
       return
     }
-    if (/\b(analy[sz]e|analysis|insight|summary|summarize|explain)\b/i.test(text) && onWorkspaceIntent) {
-      onWorkspaceIntent({
-        tab: 'analyze',
-        prompt: text,
-        questions: [
-          'Which metric matters most here?',
-          'Show top risks from this sheet',
-          'Compare sections or categories',
-          'What should I visualize next?'
-        ]
-      })
-      addMsg('ai', 'Opened the Analysis workspace and loaded follow-up questions based on your request.')
-      setBusy(false)
-      return
-    }
-    if (/\b(create|generate|make)\b.*\b(sheet|table|excel|spreadsheet)\b/i.test(text) && onWorkspaceIntent) {
-      onWorkspaceIntent({
-        tab: 'create',
-        prompt: text,
-        questions: [
-          'Should the sheet be a summary or a raw table?',
-          'Do you want formulas included?',
-          'Should I color-code or rank the rows?',
-          'Which columns are required?'
-        ]
-      })
-      setTab('generate')
-      addMsg('ai', 'Opened the Create workspace and prepared your request so you can guide the next sheet with AI.')
+    if (/\b(create|generate|make)\b.*\b(sheet|table|excel|spreadsheet)\b/i.test(text)) {
+      try {
+        const endpoint = rawRows?.length ? `${BASE}/new-sheet` : `${BASE}/generate-excel`
+        const payload = rawRows?.length
+          ? { instruction: text, rawRows, stats, department: user?.department }
+          : { prompt: text, department: user?.department || 'general' }
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+        const result = await res.json()
+        if (!res.ok) throw new Error(result.error || 'Spreadsheet generation failed')
+        if (onNewFile && result.file) onNewFile(result.file, result.rows)
+        onAnalysisResult?.({
+          kind: 'file',
+          title: asText(result.sheet_name || result.file?.name || 'New sheet'),
+          description: asText(result.description || 'A new workbook was created from chat.'),
+          rows: result.rows || [],
+          data: [],
+          createdAt: new Date().toISOString()
+        })
+        const rowCount = result.rowCount ? ` (${result.rowCount} rows)` : ''
+        addMsg('ai', `Created **${asText(result.sheet_name || result.file?.name || 'New sheet')}**${rowCount} from your chat request. Check the Analysis tab for the preview.`)
+      } catch (e: any) {
+        addMsg('system', `Spreadsheet request failed: ${e.message}`)
+      }
       setBusy(false)
       return
     }
@@ -643,17 +654,7 @@ export default function AIChatPanel({
         'section'
       if (onShowChart) {
         onShowChart({ chartType, chartDataKey, title: `AI chart: ${text}` })
-        onWorkspaceIntent?.({
-          tab: 'charts',
-          prompt: text,
-          questions: [
-            'Which field should be on the X-axis?',
-            'Do you want bar, line, or pie?',
-            'Should the chart compare sections, grades, or scores?',
-            'Do you want analysis text with the chart?'
-          ]
-        })
-        addMsg('ai', `Prepared a ${chartType} chart preview for ${chartDataKey} data. Review it in Excel, then apply or discard it.`)
+        addMsg('ai', `Prepared a ${chartType} chart preview for ${chartDataKey} data. Review it in the sheet area, then apply or discard it.`)
       } else {
         addMsg('ai', 'Chart view is not connected yet.')
       }
@@ -671,11 +672,27 @@ export default function AIChatPanel({
         const result = await res.json()
         if (!res.ok) throw new Error(result.error)
         if (result.action === 'summary') {
-          addMsg('ai', asText(result.answer || result.description || 'Done.'))
+          const summary = asText(result.answer || result.description || 'Done.')
+          onAnalysisResult?.({
+            kind: 'analysis',
+            title: 'AI analysis result',
+            description: summary,
+            data: result.data || [],
+            createdAt: new Date().toISOString()
+          })
+          addMsg('ai', summary)
         } else if (result.rows?.length > 1) {
           const summary = [asText(result.description), asText(result.answer)].filter(Boolean).join('\n\n')
           const msgId = addMsg('ai', summary || `**Result: ${result.rows.length - 1} rows**`)
           setMsgs(prev => prev.map(m => m.id === msgId ? { ...m, rows: result.rows } : m))
+          onAnalysisResult?.({
+            kind: 'analysis',
+            title: 'AI analysis result',
+            description: summary || 'Chat generated a tabular result.',
+            rows: result.rows,
+            data: result.data || [],
+            createdAt: new Date().toISOString()
+          })
           if (result.action === 'add_column' && onGridUpdate) {
             onGridUpdate(result.rows, asText(result.description || 'Column added'))
             addMsg('system', `✓ Preview ready — column "${result.column_name}" can be reviewed before applying`)
@@ -684,25 +701,11 @@ export default function AIChatPanel({
       } catch { await streamChat(text) }
     } else { await streamChat(text) }
     setBusy(false)
-  }, [busy, rawRows, stats, offlineMode, offlineCommands, onGridUpdate, onShowChart, onWorkspaceIntent, onOfflineCommand, onApplyPreview, onDiscardPreview, onUndoLastChange, addMsg, streamChat])
+  }, [busy, pendingDocRequest, rawRows, stats, onGridUpdate, onNewFile, onShowChart, onAnalysisResult, onApplyPreview, onDiscardPreview, onUndoLastChange, addMsg, streamChat, currentFile?.name, user?.department, user?.name, generateDocumentFromPrompt])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(inputDisplay) }
   }, [send, inputDisplay])
-
-  const generateFormula = async () => {
-    if (!formulaDesc.trim()) return
-    setFormulaBusy(true); setFormulaRes(null)
-    try {
-      const headers = rawRows?.[0]?.map((h: any) => String(h)) || []
-      const res = await fetch(`${BASE}/formula`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: formulaDesc, headers })
-      })
-      setFormulaRes(await res.json())
-    } catch (e: any) { setFormulaRes({ error: e.message }) }
-    setFormulaBusy(false)
-  }
 
   const generateExcel = async () => {
     if (!genPrompt.trim()) return
@@ -740,15 +743,15 @@ export default function AIChatPanel({
     setSheetBusy(false)
   }
 
-  const anyKeySet = offlineMode || keyStatus.gemini || keyStatus.hf
+  const anyKeySet = keyStatus.gemini || keyStatus.hf
   const hasHiddenStreamingAi = msgs.some(m => m.role === 'ai' && m.isStreaming && !m.content.trim())
   const hasVisibleStreamingAi = msgs.some(m => m.role === 'ai' && m.isStreaming && !!m.content.trim())
 
   if (collapsed) {
     return (
       <div onClick={() => setCollapsed(false)} style={{ width: 36, background: 'var(--bg)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 14, gap: 8, cursor: 'pointer', flexShrink: 0 }}>
-        <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', writingMode: 'vertical-lr' as any, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{offlineMode ? 'Offline' : 'AI Panel'}</span>
-        <div style={{ width: 6, height: 6, borderRadius: '50%', background: offlineMode ? 'var(--warning)' : anyKeySet ? 'var(--green)' : 'var(--orange)' }} />
+        <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', writingMode: 'vertical-lr' as any, textTransform: 'uppercase', letterSpacing: '0.06em' }}>AI Panel</span>
+        <div style={{ width: 6, height: 6, borderRadius: '50%', background: anyKeySet ? 'var(--green)' : 'var(--orange)' }} />
       </div>
     )
   }
@@ -756,14 +759,14 @@ export default function AIChatPanel({
   return (
     <aside style={{ width: panelWidth, minWidth: 280, maxWidth: 620, flexShrink: 0, background: 'var(--bg)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ height: 44, display: 'flex', alignItems: 'center', padding: '0 10px', borderBottom: '1px solid var(--border)', gap: 7, flexShrink: 0 }}>
-        <div style={{ width: 24, height: 24, background: offlineMode ? 'linear-gradient(135deg, #f59e0b, #b45309)' : 'var(--blue)', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-          {offlineMode ? 'OF' : 'AI'}
+        <div style={{ width: 24, height: 24, background: 'var(--blue)', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+          AI
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text)' }}>{offlineMode ? 'Xtron Offline' : 'Xtron'}</div>
-          <div style={{ fontSize: '0.6rem', display: 'flex', alignItems: 'center', gap: 3, color: offlineMode ? 'var(--orange)' : anyKeySet ? 'var(--green)' : 'var(--orange)' }}>
-            <div style={{ width: 4, height: 4, borderRadius: '50%', background: offlineMode ? 'var(--orange)' : anyKeySet ? 'var(--green)' : 'var(--orange)', flexShrink: 0 }} />
-            {offlineMode ? 'Offline mode active' : anyKeySet ? `${keyStatus.gemini ? 'Gemini' : ''}${keyStatus.gemini && keyStatus.hf ? ' + ' : ''}${keyStatus.hf ? 'HuggingFace' : ''} · Ready` : 'AI mode · Add API key in Settings'}
+          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text)' }}>Xtron</div>
+          <div style={{ fontSize: '0.6rem', display: 'flex', alignItems: 'center', gap: 3, color: anyKeySet ? 'var(--green)' : 'var(--orange)' }}>
+            <div style={{ width: 4, height: 4, borderRadius: '50%', background: anyKeySet ? 'var(--green)' : 'var(--orange)', flexShrink: 0 }} />
+            {anyKeySet ? `${keyStatus.gemini ? 'Gemini' : ''}${keyStatus.gemini && keyStatus.hf ? ' + ' : ''}${keyStatus.hf ? 'HuggingFace' : ''} · Ready` : 'AI mode · Add API key in Settings'}
           </div>
         </div>
         {currentFile && <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📄 {currentFile.name}</div>}
@@ -771,7 +774,7 @@ export default function AIChatPanel({
       </div>
 
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        {([['chat','Chat'], ...(!offlineMode ? [['generate','Generate'],['formula','Formula']] : []), ['settings','⚙']] as Array<[string, string]>).map(([id, label]) => (
+        {([['chat','Chat'], ['settings','⚙']] as Array<[string, string]>).map(([id, label]) => (
           <button key={id} onClick={() => setTab(id as any)}
             style={{ flex: 1, padding: '6px 0', background: 'none', border: 'none', borderBottom: tab === id ? '2px solid var(--blue)' : '2px solid transparent', cursor: 'pointer', fontSize: '0.7rem', fontWeight: tab === id ? 600 : 400, color: tab === id ? 'var(--text)' : 'var(--text-muted)' }}>
             {label}
@@ -781,13 +784,13 @@ export default function AIChatPanel({
 
       {tab === 'chat' && (
         <>
-          {!offlineMode && !anyKeySet && (
+          {!anyKeySet && (
             <div style={{ padding: '8px 10px', background: 'rgba(234,179,8,0.08)', borderBottom: '1px solid rgba(234,179,8,0.2)', fontSize: '0.65rem', color: 'var(--orange)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>⚠ No API key set</span>
               <button onClick={() => setTab('settings')} style={{ background: 'none', border: '1px solid var(--orange)', borderRadius: 4, padding: '2px 8px', fontSize: '0.62rem', color: 'var(--orange)', cursor: 'pointer' }}>Add Key</button>
             </div>
           )}
-          {rawRows && rawRows.length > 1 && !offlineMode && (
+          {rawRows && rawRows.length > 1 && (
             <div style={{ display: 'flex', gap: 4, padding: '6px 8px', borderBottom: '1px solid var(--border)', overflowX: 'auto', flexShrink: 0 }}>
               {QUICK.map(q => (
                 <button key={q} onClick={() => !busy && send(q)} disabled={busy}
@@ -855,70 +858,6 @@ export default function AIChatPanel({
           <ChatComposer busy={busy} currentFile={currentFile} onSend={send} />
         </>
       )}
-
-      {!offlineMode && tab === 'generate' && (
-        <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {offlineMode && (
-            <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, padding: 12, fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              Offline mode keeps this panel focused on local workbook commands. Use the Chat tab to run commands like `analyze data`, `create chart`, `clean data`, or `advanced excel`.
-            </div>
-          )}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
-            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 7 }}>✨ Create Excel from scratch</div>
-            <textarea className="input" value={genPrompt} onChange={e => setGenPrompt(e.target.value)} placeholder="e.g., 'Student grade sheet for 30 students with Maths, Physics, Chemistry'" style={{ width: '100%', minHeight: 70, fontSize: '0.76rem', resize: 'vertical', marginBottom: 7 }} />
-            <button className="btn btn-primary btn-sm" onClick={generateExcel} disabled={offlineMode || genBusy || !genPrompt.trim()} style={{ width: '100%', justifyContent: 'center' }}>
-              {genBusy ? '⟳ Generating...' : '✨ Generate File'}
-            </button>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 7 }}>
-              {['Student grade sheet 30 students', 'Attendance tracker semester', 'Monthly sales report'].map(ex => (
-                <button key={ex} className="btn btn-xs btn-outline" onClick={() => setGenPrompt(ex)} style={{ fontSize: '0.6rem' }}>{ex}</button>
-              ))}
-            </div>
-          </div>
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 12, opacity: !currentFile ? 0.55 : 1 }}>
-            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 5 }}>⊞ New sheet from current data</div>
-            {!currentFile && <div style={{ fontSize: '0.65rem', color: 'var(--orange)', marginBottom: 5 }}>Open a file first</div>}
-            <textarea className="input" value={sheetPrompt} onChange={e => setSheetPrompt(e.target.value)} disabled={!currentFile} placeholder={'e.g., "Top 10 students only"\n"Failed students"\n"Section summary"'} style={{ width: '100%', minHeight: 70, fontSize: '0.76rem', resize: 'vertical', marginBottom: 7 }} />
-            <button className="btn btn-outline btn-sm" onClick={generateSheet} disabled={offlineMode || sheetBusy || !sheetPrompt.trim() || !currentFile} style={{ width: '100%', justifyContent: 'center' }}>
-              {sheetBusy ? '⟳ Creating...' : '⊞ Create New Sheet'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {!offlineMode && tab === 'formula' && (
-        <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {offlineMode && (
-            <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, padding: 12, fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              Formula AI is paused offline. You can still edit cells manually in the sheet and use chat for local row, chart, and analysis commands.
-            </div>
-          )}
-          <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 3 }}>Describe what you want to calculate</div>
-          <textarea className="input" value={formulaDesc} onChange={e => setFormulaDesc(e.target.value)} onKeyDown={e => e.key === 'Enter' && e.ctrlKey && generateFormula()} placeholder={'e.g., "Average of all mark columns"\n"Count students who passed"'} style={{ width: '100%', minHeight: 80, fontSize: '0.78rem', resize: 'vertical' }} />
-          {rawRows?.[0] && <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>Columns: {rawRows[0].map((h: any) => String(h)).filter(Boolean).join(', ')}</div>}
-          <button className="btn btn-primary btn-sm" onClick={generateFormula} disabled={offlineMode || formulaBusy || !formulaDesc.trim()} style={{ justifyContent: 'center' }}>
-            {formulaBusy ? '⟳ Generating...' : 'Generate Formula'}
-          </button>
-          {formulaRes && !formulaRes.error && (
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px' }}>
-                <code style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--green)', wordBreak: 'break-all' }}>{formulaRes.formula}</code>
-                <button onClick={() => navigator.clipboard.writeText(formulaRes.formula)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px', fontSize: '0.6rem', color: 'var(--text-muted)', cursor: 'pointer', flexShrink: 0, marginLeft: 8 }}>Copy</button>
-              </div>
-              <p style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>{formulaRes.explanation}</p>
-              {formulaRes.example && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontStyle: 'italic', background: 'var(--surface-2)', borderRadius: 6, padding: '5px 8px' }}>{formulaRes.example}</div>}
-            </div>
-          )}
-          {formulaRes?.error && <div style={{ padding: '8px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 7, fontSize: '0.72rem', color: 'var(--red)' }}>{formulaRes.error}</div>}
-          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-            <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>Quick formulas</div>
-            {['Average of all mark columns', 'Count passed students (≥40)', 'Rank by total score', 'Grade: O/A+/A/B+/B/C/F', 'Sum if attendance > 75'].map(ex => (
-              <button key={ex} onClick={() => setFormulaDesc(ex)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '5px 8px', marginBottom: 3, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{ex}</button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {tab === 'settings' && (
         <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -993,3 +932,8 @@ export default function AIChatPanel({
     </aside>
   )
 }
+
+
+
+
+

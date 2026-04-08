@@ -7,7 +7,6 @@ from report_generator import generate_report
 from data_cleaning import clean_data
 from excel_generator import create_excel_template, generate_advanced_excel, read_excel
 from word_generator import generate_word_report
-from ppt_generator import generate_ppt
 from file_segmentation import get_file_info, merge_excel_files, segment_by_row_count
 from SQLite_storage import save_file_record, save_analysis, save_generated_file, log_automation
 from utils import ensure_directory, unique_output_path
@@ -69,15 +68,8 @@ def run_all(file_path: str, output_dir: str = "offline_outputs"):
     save_generated_file(file_id, "word_doc", word_path)
     print(f"      {msg}")
 
-    print("\n[8/8] Generating PowerPoint ...")
-    ppt_path = out("output_report.pptx")
-    msg = generate_ppt(file_path, output_path=ppt_path)
-    save_generated_file(file_id, "pptx", ppt_path)
-    log_automation("ppt", "success", msg)
-    print(f"      {msg}")
-
     print(f"\n{'='*55}")
-    print("  All 8 tasks complete!")
+    print("  All 7 tasks complete!")
     print(f"  Outputs saved in: {output_dir}/")
     print(f"  SQLite record ID: {file_id}")
     print(f"{'='*55}\n")
@@ -128,9 +120,6 @@ def run_single_command(command: str, file_path: str | None, output_dir: str, ext
     elif command == "word":
         output_path = unique_output_path(output_dir, "report.docx")
         print(generate_word_report(file_path, output_path=output_path))
-    elif command == "ppt":
-        output_path = unique_output_path(output_dir, "report.pptx")
-        print(generate_ppt(file_path, output_path=output_path))
     elif command == "split":
         print(segment_by_row_count(file_path, chunk_size=500, output_dir=output_dir))
     elif command == "pipeline":
@@ -143,7 +132,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Offline utilities for the GPT Excel Python engine")
     parser.add_argument(
         "command",
-        choices=["pipeline", "info", "preview", "analyze", "clean", "chart", "report", "excel", "word", "ppt", "split", "template", "merge"],
+        choices=["pipeline", "info", "preview", "analyze", "clean", "chart", "report", "excel", "word", "split", "template", "merge"],
         nargs="?",
         default="pipeline",
         help="Offline command to run",

@@ -301,7 +301,6 @@ export default function Dashboard() {
     { icon: '◱', label: 'File Manager', color: 'var(--blue)', path: '/file-manager' },
     { icon: '◬', label: 'Compare Files', color: 'var(--purple)', path: '/excel' },
     { icon: '◱', label: 'Generate Doc', color: 'var(--orange)', path: '/documents' },
-    { icon: '⌘', label: 'Workflows', color: 'var(--teal)', path: '/workflow' },
     { icon: '⚙', label: 'Settings', color: 'var(--text-muted)', path: '/settings' },
   ]
 
@@ -547,3 +546,4 @@ export default function Dashboard() {
     </div>
   )
 }
+

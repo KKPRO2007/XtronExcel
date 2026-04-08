@@ -7,15 +7,67 @@ interface Props {
 }
 
 const navItems = [
-  { id: 'dashboard', path: '/dashboard', icon: '◱', label: 'Dashboard' },
-  { id: 'excel', path: '/excel', icon: '⊞', label: 'Excel Sheet' },
-  { id: 'documents', path: '/documents', icon: '◱', label: 'Documents' },
-  { id: 'file-manager', path: '/file-manager', icon: '◈', label: 'File Manager' },
-  { id: 'workflow', path: '/workflow', icon: '⌘', label: 'Workflow' },
-  { id: 'voice', path: '/voice', icon: '◎', label: 'Voice Assistant' },
-  { id: 'powerpoint', path: '/powerpoint', icon: '◻', label: 'PPT Generator' },
-  { id: 'plugins', path: '/plugins', icon: '🔌', label: 'Plugins' },
-  { id: 'settings', path: '/settings', icon: '⚙', label: 'Settings' },
+  {
+    id: 'dashboard',
+    path: '/dashboard',
+    label: 'Dashboard',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <rect x="3" y="3" width="7" height="7" rx="1.5" />
+        <rect x="14" y="3" width="7" height="4" rx="1.5" />
+        <rect x="14" y="10" width="7" height="11" rx="1.5" />
+        <rect x="3" y="13" width="7" height="8" rx="1.5" />
+      </svg>
+    ),
+  },
+  {
+    id: 'excel',
+    path: '/excel',
+    label: 'Excel Sheet',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8" />
+        <path d="M14 3v6h6" />
+        <path d="M14 3l6 6v10a2 2 0 0 1-2 2h-4" />
+        <path d="m8 11 4 6" />
+        <path d="m12 11-4 6" />
+      </svg>
+    ),
+  },
+  {
+    id: 'documents',
+    path: '/documents',
+    label: 'Documents',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+        <path d="M14 3v6h6" />
+        <path d="M8 13h8" />
+        <path d="M8 17h6" />
+      </svg>
+    ),
+  },
+  {
+    id: 'file-manager',
+    path: '/file-manager',
+    label: 'File Manager',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'settings',
+    path: '/settings',
+    label: 'Settings',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.54V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.54 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.54-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.54-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.54V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.54 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.4.3.9.47 1.4.47H21a2 2 0 1 1 0 4h-.2c-.5 0-1 .17-1.4.53Z" />
+      </svg>
+    ),
+  },
 ];
 
 export default function Sidebar({ isOpen }: Props) {
